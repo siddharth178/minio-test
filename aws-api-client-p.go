@@ -13,9 +13,9 @@ import (
 
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"io"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 func upload(fileName string, newSession *session.Session, bucket, key *string, doneChan chan int) {
@@ -114,6 +114,52 @@ func doS3Setup(bucketName, accessKey, secretKey, awsServerAddr, region string, u
 	return newSession, nil
 }
 
+func processDirP(dirName string, fileNameChan chan string, wg *sync.WaitGroup) (fileCount int) {
+	log.Println("Processing dir:", dirName)
+	d, err := os.Open(dirName)
+	if err != nil {
+		log.Println("error in dir open:", err)
+		return
+	}
+	defer d.Close()
+
+	fNames, err := d.Readdirnames(0)
+	if err != nil {
+		log.Println("error in readdirnames:", err)
+		return
+	}
+	for _, name := range fNames {
+		fName := filepath.Join(dirName, name)
+		fileCount += processFileP(fName, fileNameChan, wg)
+	}
+	return
+}
+
+func processFileP(fName string, fileNameChan chan string, wg *sync.WaitGroup) (fileCount int) {
+	f, err := os.Open(fName)
+	if err != nil {
+		log.Println("error in open:", err)
+		return
+	}
+	defer f.Close()
+
+	stat, err := f.Stat()
+	if err != nil {
+		log.Println("error in stat:", err)
+		return
+	} else {
+		if stat.IsDir() {
+			fileCount += processDirP(fName, fileNameChan, wg)
+		} else {
+			log.Println("Sending to worker:", fName)
+			fileNameChan <- fName
+			wg.Add(1)
+			fileCount++
+		}
+	}
+	return
+}
+
 func main() {
 
 	// command line flags
@@ -139,7 +185,6 @@ func main() {
 		log.Println(err)
 		return
 	}
-	defer sourceDir.Close()
 
 	fInfo, err := sourceDir.Stat()
 	if err != nil {
@@ -150,6 +195,7 @@ func main() {
 		log.Println("Given source is not a directory")
 		return
 	}
+	sourceDir.Close()
 
 	// setup s3 session and create bucket
 	newSession, err := doS3Setup(*bucketName, *accessKey, *secretKey, *awsServerAddr, *region, *useSsl)
@@ -163,29 +209,17 @@ func main() {
 	// iterate through list of files in given directory and upload them in parallel
 	var wg sync.WaitGroup
 	fileNameChan := make(chan string, *batchSize-1)
+
+	// upload worker will wait on a chan for a filename
 	go uploadWorker(fileNameChan, &wg, newSession, aws.String(*bucketName))
 
-	fileCount := 0
-	for {
-		fileNames, err := sourceDir.Readdirnames(100)
-		if err != nil {
-			if err == io.EOF {
-				log.Println("Done with all the files in given directory")
-				break
-			} else {
-				log.Println(err)
-				return
-			}
-		}
-		for _, name := range fileNames {
-			name = filepath.Join(*source, name)
-			log.Println("Sending to worker:", name)
-			fileNameChan <- name
-			fileCount++
-			wg.Add(1)
-		}
-	}
+	// processDirP will pass in
+	fileCount := processDirP(*source, fileNameChan, &wg)
 
+	log.Println("Wait for all the files to be uploaded")
+	t1 := time.Now()
 	wg.Wait()
+	log.Println("Waited", time.Now().Sub(t1), "for goroutines to get over")
+
 	log.Println("Upload complete. Files processed:", fileCount)
 }
