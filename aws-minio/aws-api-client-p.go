@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -14,64 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
-
-func upload(fileName string, newSession *session.Session, bucket, key *string, doneChan chan int) {
-	defer func() {
-		doneChan <- 1
-	}()
-
-	// open the file and if its not diretory, continue with upload
-	f, err := os.Open(fileName)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	defer f.Close()
-
-	fStat, err := f.Stat()
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	// process the file only if its directory
-	if fStat.IsDir() {
-		log.Println("Skipping directory:", fileName)
-		return
-	}
-
-	// store data to s3
-	uploader := s3manager.NewUploader(newSession)
-	result, err := uploader.Upload(&s3manager.UploadInput{
-		Body:   f,
-		Bucket: bucket,
-		Key:    key,
-	})
-	if err != nil {
-		log.Println("Failed to upload data into s3 bucket:", err)
-		return
-	}
-
-	log.Println("Successfully uploaded object to:", *bucket, " with key:", *key, " and loc:", result.Location)
-}
-
-func uploadWorker(fileNameChan <-chan string, wg *sync.WaitGroup, newSession *session.Session, bucket *string) {
-	log.Println("Upload worker started. Waiting for files to process...")
-	for {
-		select {
-		case fileName := <-fileNameChan:
-			key := aws.String(fileName)
-			log.Println("Processing file:", fileName)
-
-			doneChan := make(chan int)
-			go upload(fileName, newSession, bucket, key, doneChan)
-			<-doneChan
-
-			wg.Done()
-		}
-	}
-}
 
 // Run needed steps to create aws config, get session and create given bucket.
 func doS3Setup(bucketName, accessKey, secretKey, awsServerAddr, region string, useSsl bool) (*session.Session, error) {
@@ -112,62 +54,6 @@ func doS3Setup(bucketName, accessKey, secretKey, awsServerAddr, region string, u
 		}
 	}
 	return newSession, nil
-}
-
-// Recursively iterate through all the files in given directory
-func processDirP(dirName string, fileNameChan chan string, wg *sync.WaitGroup) (fileCount int) {
-	log.Println("Processing dir:", dirName)
-	d, err := os.Open(dirName)
-	if err != nil {
-		log.Println("error in dir open:", err)
-		return
-	}
-	defer d.Close()
-
-	fNames, err := d.Readdirnames(0)
-	if err != nil {
-		log.Println("error in readdirnames:", err)
-		return
-	}
-	for _, name := range fNames {
-		fName := filepath.Join(dirName, name)
-		fileCount += processFileP(fName, fileNameChan, wg)
-	}
-	return
-}
-
-// If current object is file, send it to uploadWorker through file name chan, for directory, just go inside that
-// directory and look for more files.
-func processFileP(fName string, fileNameChan chan string, wg *sync.WaitGroup) (fileCount int) {
-	f, err := os.Open(fName)
-	if err != nil {
-		log.Println("error in open:", err)
-		return
-	}
-	defer f.Close()
-
-	stat, err := f.Stat()
-	if err != nil {
-		log.Println("error in stat:", err)
-		return
-	} else {
-		if stat.IsDir() {
-			fileCount += processDirP(fName, fileNameChan, wg)
-		} else {
-			// send absolute path on channel so that s3 doesn't complain about
-			// files with keys containing . or .. or something like that
-			absPath, err := filepath.Abs(fName)
-			if err != nil {
-				log.Println(err)
-			} else {
-				log.Println("Sending file to worker:", absPath)
-				fileNameChan <- absPath
-				wg.Add(1)
-				fileCount++
-			}
-		}
-	}
-	return
 }
 
 func isDir(fileName string) (bool, error) {
