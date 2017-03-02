@@ -49,7 +49,7 @@ func upload(fileName string, newSession *session.Session, bucket, key *string, d
 	log.Println("Successfully uploaded object to:", *bucket, " with key:", *key, " and loc:", result.Location)
 }
 
-func uploadWorker(fileNameChan <-chan string, wg *sync.WaitGroup, newSession *session.Session, bucket *string) {
+func uploadWorker(fileNameChan <-chan string, wg *sync.WaitGroup, newSession *session.Session, bucket string) {
 	log.Println("Upload worker started. Waiting for files to process...")
 	for {
 		select {
@@ -58,7 +58,7 @@ func uploadWorker(fileNameChan <-chan string, wg *sync.WaitGroup, newSession *se
 			log.Println("Processing file:", fileName)
 
 			doneChan := make(chan int)
-			go upload(fileName, newSession, bucket, key, doneChan)
+			go upload(fileName, newSession, aws.String(bucket), key, doneChan)
 			<-doneChan
 
 			wg.Done()

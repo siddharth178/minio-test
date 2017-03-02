@@ -62,3 +62,19 @@ func processFileP(fName string, fileNameChan chan string, wg *sync.WaitGroup) (f
 	}
 	return
 }
+
+func isDir(fileName string) (bool, error) {
+	dir, err := os.Open(fileName)
+	if err != nil {
+		log.Println(err)
+		return false, err
+	}
+	defer dir.Close()
+
+	fInfo, err := dir.Stat()
+	if err != nil {
+		log.Println(err)
+		return false, err
+	}
+	return fInfo.IsDir(), nil
+}
