@@ -32,6 +32,10 @@ Drive Capacity: 57 GiB Free, 63 GiB Total
 ```
 ### Run aws-minio client
 Use Access key and Secret key logged by minio container while running the aws-minio client. Minio container generates a new key pair everytime it is started. So do check if thats matching with your current container's values.
+
+aws-minio directory contains all the code used to build aws-minio client.
+
+#### Command to run aws-minio client
 ```
 SMPro:aws-minio siddharth$ $GOPATH/bin/aws-minio -akey T11HKWWI3Z7ZUUOU0E8T -skey +nzKnvJtXyVgQEbOrTWmti2Q62F7dsXVd0zZMSZY -sourceDir . -batchSize 3
 ```
