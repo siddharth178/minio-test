@@ -4,13 +4,10 @@ import (
 	"log"
 	"os"
 	"sync"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
-func upload(fileName string, newSession *session.Session, bucket, key *string, doneChan chan int) {
+// Upload uses fileName as Key of the object
+func upload(fileName string, s3LikeStore S3LikeStore, doneChan chan int) {
 	defer func() {
 		doneChan <- 1
 	}()
@@ -35,30 +32,22 @@ func upload(fileName string, newSession *session.Session, bucket, key *string, d
 	}
 
 	// store data to s3
-	uploader := s3manager.NewUploader(newSession)
-	result, err := uploader.Upload(&s3manager.UploadInput{
-		Body:   f,
-		Bucket: bucket,
-		Key:    key,
-	})
+	_, err = s3LikeStore.Put(fileName, f)
 	if err != nil {
 		log.Println("Failed to upload data into s3 bucket:", err)
 		return
 	}
 
-	log.Println("Successfully uploaded object to:", *bucket, " with key:", *key, " and loc:", result.Location)
+	// log.Println("Uploaded object with key:", fileName)
 }
 
-func uploadWorker(fileNameChan <-chan string, wg *sync.WaitGroup, newSession *session.Session, bucket string) {
+func uploadWorker(fileNameChan <-chan string, wg *sync.WaitGroup, s3LikeStore S3LikeStore, bucket string) {
 	log.Println("Upload worker started. Waiting for files to process...")
 	for {
 		select {
 		case fileName := <-fileNameChan:
-			key := aws.String(fileName)
-			log.Println("Processing file:", fileName)
-
 			doneChan := make(chan int)
-			go upload(fileName, newSession, aws.String(bucket), key, doneChan)
+			go upload(fileName, s3LikeStore, doneChan)
 			<-doneChan
 
 			wg.Done()

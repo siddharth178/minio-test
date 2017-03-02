@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -9,23 +10,57 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
-// Run needed steps to create aws config, get session and create given bucket.
-func doS3Setup(bucketName, accessKey, secretKey, awsServerAddr, region string, useSsl bool) (*session.Session, error) {
-	bucket := aws.String(bucketName)
+type S3LikeStore interface {
+	Put(key string, body io.Reader) (string, error)
+}
 
-	s3Config := &aws.Config{
-		Credentials: credentials.NewStaticCredentials(accessKey,
-			secretKey,
+type minioS3Store struct {
+	accessKey  string
+	secretKey  string
+	region     string
+	serverAddr string
+
+	bucketName string
+	s3Config   *aws.Config
+	session    *session.Session
+	client     *s3.S3
+	uploader   *s3manager.Uploader
+}
+
+// Create and return an instance tied to single bucket.
+func NewMinioS3Store(accessKey, secretKey, region, serverAddr, bucketName string) (S3LikeStore, error) {
+	ms := minioS3Store{accessKey: accessKey,
+		secretKey:  secretKey,
+		region:     region,
+		serverAddr: serverAddr,
+		bucketName: bucketName,
+	}
+
+	store, err := ms.initiate()
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+
+	return store, nil
+}
+
+func (ms *minioS3Store) initiate() (S3LikeStore, error) {
+	ms.s3Config = &aws.Config{
+		Credentials: credentials.NewStaticCredentials(ms.accessKey,
+			ms.secretKey,
 			""),
-		Endpoint:         aws.String(awsServerAddr),
-		Region:           aws.String(region),
-		DisableSSL:       aws.Bool(!useSsl),
+		Endpoint:         aws.String(ms.serverAddr),
+		Region:           aws.String(ms.region),
+		DisableSSL:       aws.Bool(true),
 		S3ForcePathStyle: aws.Bool(true),
 	}
 
-	newSession, err := session.NewSession(s3Config)
+	var err error
+	ms.session, err = session.NewSession(ms.s3Config)
 	if err != nil {
 		fmt.Println(err)
 		return nil, err
@@ -33,10 +68,13 @@ func doS3Setup(bucketName, accessKey, secretKey, awsServerAddr, region string, u
 	log.Println("AWS session created using given config")
 
 	// create s3 client using session
-	s3Client := s3.New(newSession)
+	ms.client = s3.New(ms.session)
+
+	// create uploader
+	ms.uploader = s3manager.NewUploader(ms.session)
 
 	// create a new bucket using create bucket call
-	_, err = s3Client.CreateBucket(&s3.CreateBucketInput{Bucket: bucket})
+	_, err = ms.client.CreateBucket(&s3.CreateBucketInput{Bucket: aws.String(ms.bucketName)})
 	if err != nil {
 		// check for specific error and ignore if bucket is already exists error
 		if aerr, ok := err.(awserr.Error); ok {
@@ -49,5 +87,19 @@ func doS3Setup(bucketName, accessKey, secretKey, awsServerAddr, region string, u
 			}
 		}
 	}
-	return newSession, nil
+
+	return ms, nil
+}
+
+func (ms *minioS3Store) Put(key string, body io.Reader) (string, error) {
+	result, err := ms.uploader.Upload(&s3manager.UploadInput{
+		Body:   body,
+		Bucket: aws.String(ms.bucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		log.Println("Failed to upload data into s3 bucket:", err)
+		return "", err
+	}
+	return result.Location, nil
 }

@@ -53,7 +53,7 @@ func processFileP(fName string, fileNameChan chan string, wg *sync.WaitGroup) (f
 			if err != nil {
 				log.Println(err)
 			} else {
-				log.Println("Sending file to worker:", absPath)
+				log.Println("Sending to worker:", absPath)
 				fileNameChan <- absPath
 				wg.Add(1)
 				fileCount++
@@ -63,6 +63,7 @@ func processFileP(fName string, fileNameChan chan string, wg *sync.WaitGroup) (f
 	return
 }
 
+// check if object pointed by given name is directory
 func isDir(fileName string) (bool, error) {
 	dir, err := os.Open(fileName)
 	if err != nil {

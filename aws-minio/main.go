@@ -16,7 +16,6 @@ func main() {
 	bucketName := flag.String("bucket", "mybucket", "Bucket name to be used")
 	awsServerAddr := flag.String("serverAddr", "http://localhost:9000", "Aws server to connect to")
 	region := flag.String("region", "us-east-1", "Aws region to use")
-	useSsl := flag.Bool("ssl", false, "Use SSL while talking to aws")
 	source := flag.String("sourceDir", "", "Files from this directory will get uploaded")
 	batchSize := flag.Int("batchSize", 5, "Files will be uploaded to s3 in batches of this size")
 	flag.Parse()
@@ -39,10 +38,10 @@ func main() {
 	}
 	log.Println("Uploading files from following dir:", *source)
 
-	// setup s3 session and create bucket
-	newSession, err := doS3Setup(*bucketName, *accessKey, *secretKey, *awsServerAddr, *region, *useSsl)
+	// Create s3like store
+	s3Like, err := NewMinioS3Store(*accessKey, *secretKey, *region, *awsServerAddr, *bucketName)
 	if err != nil {
-		log.Println(err)
+		log.Println("Failed to create s3 like store:", err)
 		return
 	}
 
@@ -51,7 +50,7 @@ func main() {
 	fileNameChan := make(chan string, *batchSize-1)
 
 	// upload worker will wait on a chan for a filename
-	go uploadWorker(fileNameChan, &wg, newSession, *bucketName)
+	go uploadWorker(fileNameChan, &wg, s3Like, *bucketName)
 
 	ut1 := time.Now()
 	// iterate through list of files in given directory and upload them in parallel
