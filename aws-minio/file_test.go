@@ -125,7 +125,6 @@ func TestProcessDirP(t *testing.T) {
 				break
 			}
 		}
-		return
 	}()
 
 	fileCount := processDirP(TMP_DIR_ROOT, fileNameChan)
