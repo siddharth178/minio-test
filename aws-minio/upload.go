@@ -23,7 +23,7 @@ func (bs *BatchState) CanUpload() bool {
 func (bs *BatchState) Update(count int) {
 	bs.Lock()
 	bs.CurrCount += count
-	log.Println(bs.CurrCount)
+	log.Println(bs.CurrCount, "\tactive")
 	bs.Unlock()
 
 }
@@ -71,7 +71,6 @@ func uploadWorker(fileNameChan <-chan string, errorChan chan error, wg *sync.Wai
 
 		fileName := <-fileNameChan
 
-		log.Println("Processing:", fileName)
 		wg.Add(1)
 		bs.Update(1)
 		go func() {
