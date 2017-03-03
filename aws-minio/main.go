@@ -46,16 +46,21 @@ func main() {
 	}
 
 	// start upload worker and make it listen on file name chan
-	var wg sync.WaitGroup
-	fileNameChan := make(chan string, *batchSize-1)
+	var wg sync.WaitGroup             // to wait for all the things to finish
+	fileNameChan := make(chan string) // send file to process
+
+	bs := BatchState{
+		CurrCount: 0,
+		Max:       *batchSize,
+	}
 
 	// upload worker will wait on a chan for a filename
-	go uploadWorker(fileNameChan, &wg, s3Like, *bucketName)
+	go uploadWorker(fileNameChan, &wg, &bs, s3Like)
 
 	ut1 := time.Now()
 	// iterate through list of files in given directory and upload them in parallel
 	// processDirP will pass in
-	fileCount := processDirP(*source, fileNameChan, &wg)
+	fileCount := processDirP(*source, fileNameChan)
 
 	log.Println("Wait for all the files to be uploaded")
 	t1 := time.Now()
