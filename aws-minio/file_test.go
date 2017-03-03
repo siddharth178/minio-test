@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 )
 
@@ -113,7 +112,6 @@ func TestIsDirWithFile(t *testing.T) {
 }
 
 func TestProcessDirP(t *testing.T) {
-	var wg sync.WaitGroup // we don't use it to check anything in this test
 	fileNameChan := make(chan string, 100)
 
 	quitChan := make(chan int)
@@ -130,7 +128,7 @@ func TestProcessDirP(t *testing.T) {
 		return
 	}()
 
-	fileCount := processDirP(TMP_DIR_ROOT, fileNameChan, &wg)
+	fileCount := processDirP(TMP_DIR_ROOT, fileNameChan)
 
 	// stop the listening goroutine
 	quitChan <- 1

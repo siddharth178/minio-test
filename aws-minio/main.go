@@ -48,6 +48,7 @@ func main() {
 	// start upload worker and make it listen on file name chan
 	var wg sync.WaitGroup             // to wait for all the things to finish
 	fileNameChan := make(chan string) // send file to process
+	errorChan := make(chan error)
 
 	bs := BatchState{
 		CurrCount: 0,
@@ -55,7 +56,15 @@ func main() {
 	}
 
 	// upload worker will wait on a chan for a filename
-	go uploadWorker(fileNameChan, &wg, &bs, s3Like)
+	go uploadWorker(fileNameChan, errorChan, &wg, &bs, s3Like)
+
+	var errList []error
+	go func() {
+		for {
+			err := <-errorChan
+			errList = append(errList, err)
+		}
+	}()
 
 	ut1 := time.Now()
 	// iterate through list of files in given directory and upload them in parallel
@@ -69,4 +78,9 @@ func main() {
 
 	log.Println("Upload complete. Files processed:", fileCount)
 	log.Println("Total time required to upload all the files:", time.Now().Sub(ut1))
+
+	log.Println(len(errList), "uploads failed")
+	for _, e := range errList {
+		log.Println("Err:", e)
+	}
 }
