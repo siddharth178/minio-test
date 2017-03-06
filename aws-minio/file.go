@@ -10,21 +10,18 @@ import (
 func processDirP(dirName string, fileNameChan chan string, errorChan chan error) (fileCount int, err error) {
 	d, err := os.Open(dirName)
 	if err != nil {
-		log.Println("error in dir open:", err)
-		return
+		return 0, err
 	}
 	defer d.Close()
 
 	fNames, err := d.Readdirnames(0)
 	if err != nil {
-		log.Println("error in readdirnames:", err)
-		return
+		return 0, err
 	}
 	for _, name := range fNames {
 		fName := filepath.Join(dirName, name)
 		fc, err := processFileP(fName, fileNameChan, errorChan)
 		if err != nil {
-			log.Println(err, "ignoring it for now...")
 			errorChan <- err
 			// continue with other files and directories in this
 			// directory
@@ -32,7 +29,7 @@ func processDirP(dirName string, fileNameChan chan string, errorChan chan error)
 			fileCount += fc
 		}
 	}
-	return
+	return fileCount, nil
 }
 
 // If current object is file, send it to uploadWorker through file name chan, for directory, just go inside that
@@ -41,20 +38,20 @@ func processFileP(fName string, fileNameChan chan string, errorChan chan error) 
 	f, err := os.Open(fName)
 	if err != nil {
 		log.Println("error in open:", err)
-		return
+		return 0, err
 	}
 	defer f.Close()
 
 	stat, err := f.Stat()
 	if err != nil {
 		log.Println("error in stat:", err)
-		return
+		return 0, err
 	} else {
 		if stat.IsDir() {
 			fc, err := processDirP(fName, fileNameChan, errorChan)
 			if err != nil {
-				log.Println(err)
-				errorChan <- err
+				log.Println("error occured while processing dir:", err)
+				return 0, err
 			} else {
 				fileCount += fc
 			}
@@ -72,21 +69,19 @@ func processFileP(fName string, fileNameChan chan string, errorChan chan error) 
 			}
 		}
 	}
-	return
+	return fileCount, nil
 }
 
 // check if object pointed by given name is directory
 func isDir(fileName string) (bool, error) {
 	dir, err := os.Open(fileName)
 	if err != nil {
-		log.Println(err)
 		return false, err
 	}
 	defer dir.Close()
 
 	fInfo, err := dir.Stat()
 	if err != nil {
-		log.Println(err)
 		return false, err
 	}
 	return fInfo.IsDir(), nil
