@@ -50,13 +50,8 @@ func main() {
 	fileNameChan := make(chan string) // send file to process
 	errorChan := make(chan error)
 
-	bs := BatchState{
-		CurrCount: 0,
-		Max:       *batchSize,
-	}
-
 	// upload worker will wait on a chan for a filename
-	go uploadWorker(fileNameChan, errorChan, &wg, &bs, s3Like)
+	go uploadWorker(fileNameChan, errorChan, *batchSize, &wg, s3Like)
 
 	var errList []error
 	go func() {

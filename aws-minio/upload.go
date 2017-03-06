@@ -59,7 +59,12 @@ func upload(fileName string, s3LikeStore S3LikeStore) error {
 	return nil
 }
 
-func uploadWorker(fileNameChan <-chan string, errorChan chan error, wg *sync.WaitGroup, bs *BatchState, s3LikeStore S3LikeStore) {
+func uploadWorker(fileNameChan <-chan string, errorChan chan error, batchSize int, wg *sync.WaitGroup, s3LikeStore S3LikeStore) {
+	bs := BatchState{
+		CurrCount: 0,
+		Max:       batchSize,
+	}
+
 	log.Println("Upload worker started. Waiting for files to process...")
 	for {
 		// wait for canupload to allow us
