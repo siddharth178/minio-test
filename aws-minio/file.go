@@ -7,7 +7,7 @@ import (
 )
 
 // Recursively iterate through all the files in given directory
-func processDirP(dirName string, fileNameChan chan string) (fileCount int) {
+func processDirP(dirName string, fileNameChan chan string, errorChan chan error) (fileCount int, err error) {
 	d, err := os.Open(dirName)
 	if err != nil {
 		log.Println("error in dir open:", err)
@@ -22,14 +22,22 @@ func processDirP(dirName string, fileNameChan chan string) (fileCount int) {
 	}
 	for _, name := range fNames {
 		fName := filepath.Join(dirName, name)
-		fileCount += processFileP(fName, fileNameChan)
+		fc, err := processFileP(fName, fileNameChan, errorChan)
+		if err != nil {
+			log.Println(err, "ignoring it for now...")
+			errorChan <- err
+			// continue with other files and directories in this
+			// directory
+		} else {
+			fileCount += fc
+		}
 	}
 	return
 }
 
 // If current object is file, send it to uploadWorker through file name chan, for directory, just go inside that
 // directory and look for more files.
-func processFileP(fName string, fileNameChan chan string) (fileCount int) {
+func processFileP(fName string, fileNameChan chan string, errorChan chan error) (fileCount int, err error) {
 	f, err := os.Open(fName)
 	if err != nil {
 		log.Println("error in open:", err)
@@ -43,13 +51,20 @@ func processFileP(fName string, fileNameChan chan string) (fileCount int) {
 		return
 	} else {
 		if stat.IsDir() {
-			fileCount += processDirP(fName, fileNameChan)
+			fc, err := processDirP(fName, fileNameChan, errorChan)
+			if err != nil {
+				log.Println(err)
+				errorChan <- err
+			} else {
+				fileCount += fc
+			}
 		} else {
 			// send absolute path on channel so that s3 doesn't complain about
 			// files with keys containing . or .. or something like that
 			absPath, err := filepath.Abs(fName)
 			if err != nil {
 				log.Println(err)
+				return 0, err
 			} else {
 				log.Println("Sending:", absPath)
 				fileNameChan <- absPath // this will block if fileNameChan is full

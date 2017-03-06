@@ -85,6 +85,8 @@ func (ms *minioS3Store) initiate() (S3LikeStore, error) {
 				log.Println(err)
 				return nil, err
 			}
+		} else {
+			return nil, err
 		}
 	}
 

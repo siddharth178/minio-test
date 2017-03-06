@@ -69,7 +69,11 @@ func main() {
 	ut1 := time.Now()
 	// iterate through list of files in given directory and upload them in parallel
 	// processDirP will pass in
-	fileCount := processDirP(*source, fileNameChan)
+	fileCount, err := processDirP(*source, fileNameChan, errorChan)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 
 	log.Println("Wait for all the files to be uploaded")
 	t1 := time.Now()

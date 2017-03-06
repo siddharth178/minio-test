@@ -113,6 +113,7 @@ func TestIsDirWithFile(t *testing.T) {
 
 func TestProcessDirP(t *testing.T) {
 	fileNameChan := make(chan string, 100)
+	errorChan := make(chan error, 100)
 
 	quitChan := make(chan int)
 	fileCountFromChan := 0
@@ -127,8 +128,10 @@ func TestProcessDirP(t *testing.T) {
 		}
 	}()
 
-	fileCount := processDirP(TMP_DIR_ROOT, fileNameChan)
-
+	fileCount, err := processDirP(TMP_DIR_ROOT, fileNameChan, errorChan)
+	if err != nil {
+		t.Error(err)
+	}
 	// stop the listening goroutine
 	quitChan <- 1
 
