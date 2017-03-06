@@ -86,6 +86,7 @@ func (ms *minioS3Store) initiate() (S3LikeStore, error) {
 				return nil, err
 			}
 		} else {
+			// don't ignore this error. report it to the caller
 			return nil, err
 		}
 	}
